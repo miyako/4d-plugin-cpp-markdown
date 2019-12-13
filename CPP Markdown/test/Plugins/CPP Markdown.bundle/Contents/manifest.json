@@ -1,0 +1,11 @@
+{
+	"name": "CPP Markdown",
+	"id": 20000,
+	"commands": [
+		{
+			"theme": "CPP Markdown",
+			"syntax": "CPP Markdown(&T):T",
+      "threadSafe": true
+		}
+	]
+}

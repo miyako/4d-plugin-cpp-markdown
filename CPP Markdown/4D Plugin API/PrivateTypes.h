@@ -1,3 +1,11 @@
+/**
+ * Copyright (c) 2017-present, 4D, Inc.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+
 // ---------------------------------------------------------------
 //
 // 4D Plugin API
@@ -6,7 +14,7 @@
 // Description : This file stores all the internal structures
 //				 used by 4D Plugin API and useless for API user.
 //
-// rev : v12.0
+// rev : v13
 //
 // ---------------------------------------------------------------
 
@@ -33,7 +41,7 @@ typedef struct LineBlock
 		char				fString[42];
 		double				fReal;			
 		PA_Date				fDate;
-		long				fLongint;
+		PA_long32				fLongint;
 		short				fInteger;
 		char				fBoolean;
 		PA_Unichar*			fUnichars;
@@ -59,7 +67,7 @@ typedef struct EngineBlock
 // to the EngineBlock of 4D 2004
 	short				fTable;
 	short				fField;
-	long				fRecord;
+	PA_long32				fRecord;
 	char				fManyToOne;
 	char				fOneToMany;
 	char				fName[256];
@@ -72,7 +80,7 @@ typedef struct EngineBlock
 	double				fReal;	
 	short				fFiller;
 	PA_Date				fDate;
-	long				fLongint;			
+	PA_long32				fLongint;
 	short				fShort;		
 	char				fString[82];		
 	short				fTextSize;
@@ -86,29 +94,29 @@ typedef struct EngineBlock
 #define Call4D(s,p) (*gCall4D)(s,p)
 
 #if VERSIONMAC
-	#define FOURDCALL pascal __attribute__((visibility("default"))) void
+	#define FOURDCALL __attribute__((visibility("default"))) void
 #elif VERSIONWIN
 	#define FOURDCALL void __stdcall
 #endif
 
 #if VERSIONMAC
-	typedef pascal void (*Call4DProcPtr)( short, EngineBlock* );
+	typedef void (*Call4DProcPtr)( short, EngineBlock* );
 #elif VERSIONWIN
 	typedef void (__stdcall *Call4DProcPtr)( short, EngineBlock* );
 #endif
 
-FOURDCALL FourDPackex( long selector, void* params, void** data, void* result );
+FOURDCALL FourDPackex( PA_long32 selector, void* params, void** data, void* result );
 
 extern Call4DProcPtr gCall4D;
 
 // this structure is sent to Plugin at init.
 typedef struct PackInitBlock
 {
-	long			fVersion;
-	long			fLength;
-	long			fCPUType;
+	PA_long32			fVersion;
+	PA_long32			fLength;
+	PA_long32			fCPUType;
 	Call4DProcPtr	fCall4D;
- 	long			fSupportedVersion;
+ 	PA_long32			fSupportedVersion;
 	Call4DProcPtr	fCall4Dex;
 } PackInitBlock;
 
