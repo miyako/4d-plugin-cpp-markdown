@@ -22,4 +22,4 @@ origin=Developer ID Application: keisuke miyako (Y69CWUC25B)
 
 ### Syntax
 
-[miyako.github.io](https://miyako.github.io/2019/12/13/4d-plugin-pp-markdown.html)
+[miyako.github.io](https://miyako.github.io/2019/12/13/4d-plugin-cpp-markdown.html)
