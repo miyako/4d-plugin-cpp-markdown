@@ -221,8 +221,23 @@ jobs:
           ./bootstrap.sh
           ./b2 headers
 
+          # `b2 headers` builds that boost/ directory entirely out of
+          # symlinks pointing back into each submodule's own
+          # libs/<name>/include/boost/... — it doesn't copy real files.
+          # macOS's cp -R preserves symlinks as symlinks rather than
+          # following them, so copying only boost/ (without the sibling
+          # libs/ tree the links point into) produced dangling symlinks at
+          # the destination: the include path resolved correctly (visible
+          # in the next build's own -isystem flag) but every individual
+          # header inside it was broken, so the compile still failed with
+          # the exact same "boost/noncopyable.hpp file not found" as before
+          # the fix, despite the fix otherwise doing what it intended.
+          # `-L` makes cp follow (dereference) symlinks during the
+          # recursive copy, writing real file contents instead of relative
+          # links that depend on the rest of /tmp/boost-1.72.0 still being
+          # there.
           sudo mkdir -p /usr/local/Cellar/boost/1.72.0/include
-          sudo cp -R /tmp/boost-1.72.0/boost /usr/local/Cellar/boost/1.72.0/include/boost
+          sudo cp -RL /tmp/boost-1.72.0/boost /usr/local/Cellar/boost/1.72.0/include/boost
 
       - name: build macOS plugin (universal)
         run: |
