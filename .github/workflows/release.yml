@@ -59,6 +59,36 @@ jobs:
       - name: setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      # The project's own .vcxproj (verified identical between the v2.1.1 tag
+      # this job builds and current master) hardcodes its Boost include path
+      # to the original author's own machine:
+      #   C:\Users\miyako\Documents\vcpkg\vcpkg-master\installed\x64-windows-static\include
+      # and links against lib\windows64\boost_regex-vc140-mt.lib, which isn't
+      # vendored in the repo at all. Neither is provided anywhere in this
+      # workflow, so the compile fails at markdown.h's
+      # `#include <boost/noncopyable.hpp>` before ever reaching the link step.
+      #
+      # Fix: install vcpkg to that exact path (so the existing hardcoded
+      # include dir resolves with zero .vcxproj edits), then copy the
+      # resulting static lib into the exact name/location the linker expects.
+      # NOTE: the source lib filename below (boost_regex.lib) is vcpkg's
+      # x64-windows-static convention as of this writing, not something this
+      # job has confirmed end-to-end on a runner. If the link step still
+      # fails after this, `dir` that install lib folder in the log to get the
+      # real filename and adjust the Copy-Item source accordingly.
+      - name: install Boost (vcpkg)
+        shell: pwsh
+        run: |
+          $vcpkgRoot = "C:\Users\miyako\Documents\vcpkg\vcpkg-master"
+          New-Item -ItemType Directory -Force -Path (Split-Path $vcpkgRoot) | Out-Null
+          git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
+          & "$vcpkgRoot\bootstrap-vcpkg.bat"
+          & "$vcpkgRoot\vcpkg.exe" install boost-regex:x64-windows-static boost-optional:x64-windows-static
+
+          New-Item -ItemType Directory -Force -Path "lib\windows64" | Out-Null
+          Copy-Item "$vcpkgRoot\installed\x64-windows-static\lib\boost_regex.lib" `
+                    "lib\windows64\boost_regex-vc140-mt.lib"
+
       # GitHub-hosted windows-latest ships VS2022 (v143 toolset) but not the
       # legacy v140 toolset the project is pinned to, so we override it on
       # the command line rather than requiring an extra VS component install.
