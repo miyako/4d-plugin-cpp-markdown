@@ -71,11 +71,15 @@ jobs:
       # Fix: install vcpkg to that exact path (so the existing hardcoded
       # include dir resolves with zero .vcxproj edits), then copy the
       # resulting static lib into the exact name/location the linker expects.
-      # NOTE: the source lib filename below (boost_regex.lib) is vcpkg's
-      # x64-windows-static convention as of this writing, not something this
-      # job has confirmed end-to-end on a runner. If the link step still
-      # fails after this, `dir` that install lib folder in the log to get the
-      # real filename and adjust the Copy-Item source accordingly.
+      #
+      # The exact output filename vcpkg's boost-regex port produces for this
+      # triplet turned out NOT to be the plain `boost_regex.lib` originally
+      # guessed here (that guess was wrong and failed a real CI run with
+      # "Cannot find path ...boost_regex.lib because it does not exist").
+      # Rather than guess again, this now searches the actual install lib
+      # folder for whatever file matches and fails loudly with a directory
+      # listing if nothing does, so it's self-diagnosing instead of
+      # silently wrong a second time.
       - name: install Boost (vcpkg)
         shell: pwsh
         run: |
@@ -85,9 +89,18 @@ jobs:
           & "$vcpkgRoot\bootstrap-vcpkg.bat"
           & "$vcpkgRoot\vcpkg.exe" install boost-regex:x64-windows-static boost-optional:x64-windows-static
 
+          $libDir = Join-Path $vcpkgRoot "installed\x64-windows-static\lib"
+          $regexLib = Get-ChildItem -Path $libDir -Filter "*boost_regex*.lib" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+          if (-not $regexLib) {
+            Write-Host "Could not find a boost_regex library under $libDir. Contents:"
+            Get-ChildItem -Path $libDir | Format-Table Name
+            throw "boost_regex library not found after vcpkg install"
+          }
+
+          Write-Host "Using $($regexLib.FullName)"
           New-Item -ItemType Directory -Force -Path "lib\windows64" | Out-Null
-          Copy-Item "$vcpkgRoot\installed\x64-windows-static\lib\boost_regex.lib" `
-                    "lib\windows64\boost_regex-vc140-mt.lib"
+          Copy-Item $regexLib.FullName "lib\windows64\boost_regex-vc140-mt.lib"
 
       # GitHub-hosted windows-latest ships VS2022 (v143 toolset) but not the
       # legacy v140 toolset the project is pinned to, so we override it on
