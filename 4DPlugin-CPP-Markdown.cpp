@@ -35,31 +35,52 @@ void PluginMain(PA_long32 selector, PA_PluginParameters params) {
 
 #pragma mark -
 
+// Upper bound on input length, in bytes, that we will attempt to parse.
+// cpp-markdown (like most regex-based markdown parsers) can exhibit
+// catastrophic-backtracking behaviour on certain pathological inputs.
+// Rejecting oversized input up front is a cheap mitigation against a
+// runaway parse freezing the calling process. Adjust to taste.
+static const size_t kMaxMarkdownInputBytes = 1 * 1024 * 1024; // 1 MB
+
 void CPP_Markdown(PA_PluginParameters params) {
-    
+
     sLONG_PTR *pResult = (sLONG_PTR *)params->fResult;
+
+    // Set a safe, empty default return value FIRST. If anything below
+    // throws (bad input, parser exception, allocation failure, etc.),
+    // the outer catch(...) in PluginMain will land here having already
+    // returned a well-formed empty TEXT rather than leaving *pResult
+    // pointing at uninitialized/stale memory, which 4D would otherwise
+    // try to interpret as a valid TEXT reference (undefined behaviour /
+    // potential crash in the host).
+    C_TEXT returnValue;
+    returnValue.setReturn(pResult);
+
     PackagePtr pParams = (PackagePtr)params->fParameters;
 
     C_TEXT Param1;
-    C_TEXT returnValue;
-
     Param1.fromParamAtIndex(pParams, 1);
 
     CUTF8String u;
     Param1.copyUTF8String(&u);
 
+    // Defensive size cap: refuse to parse absurdly large input rather
+    // than risk a very long or hung parse on the calling thread.
+    if (u.length() > kMaxMarkdownInputBytes) {
+        return; // returnValue already set to empty above
+    }
+
     markdown::Document doc;
-    
+
     std::istringstream instream(std::string((const char *)u.c_str(), u.length()));
     doc.read(instream);
-    
+
     std::ostringstream outstream;
     doc.write(outstream);
-    
+
     std::string dst = outstream.str();
     returnValue.setUTF8String((const uint8_t *)dst.c_str(), dst.length());
-    
-    returnValue.setReturn(pResult);
 
+    returnValue.setReturn(pResult);
 }
 
