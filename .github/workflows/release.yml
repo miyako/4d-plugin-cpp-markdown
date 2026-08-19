@@ -208,6 +208,19 @@ jobs:
           set -euo pipefail
           git clone --recurse-submodules --shallow-submodules --depth 1 \
             --branch boost-1.72.0 https://github.com/boostorg/boost.git /tmp/boost-1.72.0
+
+          # The superproject clone only gives each submodule its own separate
+          # include tree (libs/regex/include/boost/, libs/core/include/boost/,
+          # ...) — there's no unified top-level boost/ folder until Boost's
+          # own build tool generates one. `b2 headers` is what actually
+          # collates every submodule's include/boost/* into a single
+          # boost/ directory; skipping it (assuming the clone alone produces
+          # boost/) failed a real CI run here with
+          # "cp: /tmp/boost-1.72.0/boost: No such file or directory".
+          cd /tmp/boost-1.72.0
+          ./bootstrap.sh
+          ./b2 headers
+
           sudo mkdir -p /usr/local/Cellar/boost/1.72.0/include
           sudo cp -R /tmp/boost-1.72.0/boost /usr/local/Cellar/boost/1.72.0/include/boost
 
