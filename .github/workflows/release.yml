@@ -59,31 +59,25 @@ jobs:
       - name: setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      # The project's own .vcxproj (verified identical between the v2.1.1 tag
-      # this job builds and current master) hardcodes its Boost include path
-      # to the original author's own machine:
+      # The project's own .vcxproj hardcodes its Boost include path to the
+      # original author's own machine:
       #   C:\Users\miyako\Documents\vcpkg\vcpkg-master\installed\x64-windows-static\include
-      # and links against lib\windows64\boost_regex-vc140-mt.lib, which isn't
-      # vendored in the repo at all. Neither is provided anywhere in this
-      # workflow, so the compile fails at markdown.h's
-      # `#include <boost/noncopyable.hpp>` before ever reaching the link step.
+      # which isn't provided anywhere in this workflow, so the compile fails
+      # at markdown.h's `#include <boost/noncopyable.hpp>`.
       #
       # Fix: install vcpkg to that exact path (so the existing hardcoded
-      # include dir resolves with zero .vcxproj edits), then locate and copy
-      # the resulting static lib into the exact name/location the linker
-      # expects.
+      # include dir resolves with zero .vcxproj edits to that setting).
       #
-      # Two guesses about vcpkg's output layout have already failed real CI
-      # runs here, in sequence: (1) assuming the exact filename
-      # (`boost_regex.lib`) — wrong, that file didn't exist; (2) assuming it
-      # would at least be directly under `installed\x64-windows-static\lib`
-      # — also wrong, that whole directory didn't exist on this vcpkg
-      # version/runner. Rather than guess a third specific location, this
-      # now searches the entire vcpkg root recursively for any matching
-      # `.lib` file and fails loudly with a full directory dump if none is
-      # found — this cannot be verified further without an actual Windows
-      # runner, so treat the next CI log as the real source of truth on
-      # where vcpkg actually put it, not this comment.
+      # Boost is header-only-in-practice for this project's needs on this
+      # vcpkg snapshot: three real CI runs chasing a compiled
+      # `boost_regex-*.lib` (guessed filename, then guessed directory, then
+      # a full recursive search) all came up empty, and the last one's
+      # directory dump confirmed why — `boost-regex_x64-windows-static`'s
+      # package folder here contains only `include/`, `share/`, `BUILD_INFO`,
+      # `CONTROL`, no `lib/` at all. This vcpkg snapshot's Boost.Regex port
+      # doesn't produce a compiled library for this triplet. The matching
+      # fix is on the .vcxproj side (see its own comment) — this step now
+      # only installs headers.
       - name: install Boost (vcpkg)
         shell: pwsh
         run: |
@@ -92,19 +86,6 @@ jobs:
           git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
           & "$vcpkgRoot\bootstrap-vcpkg.bat"
           & "$vcpkgRoot\vcpkg.exe" install boost-regex:x64-windows-static boost-optional:x64-windows-static
-
-          $regexLib = Get-ChildItem -Path $vcpkgRoot -Recurse -Filter "*boost_regex*.lib" -ErrorAction SilentlyContinue | Select-Object -First 1
-
-          if (-not $regexLib) {
-            Write-Host "Could not find any boost_regex .lib anywhere under $vcpkgRoot. Full installed/packages tree:"
-            Get-ChildItem -Path (Join-Path $vcpkgRoot "installed") -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
-            Get-ChildItem -Path (Join-Path $vcpkgRoot "packages") -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
-            throw "boost_regex library not found anywhere under vcpkg root after install"
-          }
-
-          Write-Host "Using $($regexLib.FullName)"
-          New-Item -ItemType Directory -Force -Path "lib\windows64" | Out-Null
-          Copy-Item $regexLib.FullName "lib\windows64\boost_regex-vc140-mt.lib"
 
       # GitHub-hosted windows-latest ships VS2022 (v143 toolset) but not the
       # legacy v140 toolset the project is pinned to, so we override it on
