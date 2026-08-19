@@ -183,6 +183,34 @@ jobs:
             --password "$APP_PASSWORD" \
             --keychain "$KEYCHAIN_PATH"
 
+      # Same underlying issue as the Windows job's Boost step, different
+      # shape: the project's own .xcodeproj (all three build configs) sets
+      #   SYSTEM_HEADER_SEARCH_PATHS = /usr/local/Cellar/boost/1.72.0/include
+      # a hardcoded old-Homebrew-Intel path never provisioned on this
+      # runner. Unlike Windows, the compiled library isn't missing here —
+      # `a/libboost_regex.a` is actually vendored in the repo already, and
+      # LIBRARY_SEARCH_PATHS references it via `$(PROJECT_DIR)/a` (no
+      # personal-machine path on the library side, only the header side).
+      #
+      # So only headers are needed, but the EXACT version matters more here
+      # than it did for Windows' header-only vcpkg fix: this vendored .a is
+      # a real compiled binary, presumably built against Boost 1.72.0
+      # specifically (per the hardcoded folder name). Mixing it with a
+      # different Boost version's headers risks the header/binary ABI-split
+      # failure class this playbook already catalogs elsewhere (mismatched
+      # class layouts/symbols between a vendored binary and newer headers)
+      # — so this fetches that exact tagged version from source, with
+      # submodules (Boost's superproject splits each library into its own
+      # repo), rather than installing whatever Homebrew's current boost
+      # formula happens to ship.
+      - name: install Boost 1.72.0 headers (matching vendored libboost_regex.a)
+        run: |
+          set -euo pipefail
+          git clone --recurse-submodules --shallow-submodules --depth 1 \
+            --branch boost-1.72.0 https://github.com/boostorg/boost.git /tmp/boost-1.72.0
+          sudo mkdir -p /usr/local/Cellar/boost/1.72.0/include
+          sudo cp -R /tmp/boost-1.72.0/boost /usr/local/Cellar/boost/1.72.0/include/boost
+
       - name: build macOS plugin (universal)
         run: |
           xcodebuild -project "${{ env.XCODE_PROJECT }}" \
