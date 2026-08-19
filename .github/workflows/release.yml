@@ -239,6 +239,60 @@ jobs:
           sudo mkdir -p /usr/local/Cellar/boost/1.72.0/include
           sudo cp -RL /tmp/boost-1.72.0/boost /usr/local/Cellar/boost/1.72.0/include/boost
 
+      # The repo's vendored a/libboost_regex.a compiles and links fine for
+      # x86_64, but the workflow builds a *universal* (arm64 + x86_64)
+      # binary, and a real CI run confirmed the vendored archive has no
+      # arm64 slice at all (checked its object files' Mach-O headers:
+      # cputype 0x01000007 = CPU_TYPE_X86_64, none present for arm64) —
+      # unsurprising, since this plugin dates to 2019, over a year before
+      # the first Apple Silicon Mac existed. No amount of CI-side path
+      # provisioning fixes a genuinely single-architecture prebuilt binary;
+      # per the person's explicit choice, this builds a real universal
+      # replacement from source instead of dropping arm64 (Rosetta) support.
+      #
+      # Compiles the exact same 17 translation units the vendored .a
+      # contains (confirmed via `ar t a/libboost_regex.a` against the
+      # actual file, not assumed from Boost docs) directly with clang++ for
+      # each architecture separately, archives each, then `lipo -create`s
+      # them into one universal static library and overwrites the vendored
+      # one at its existing path — LIBRARY_SEARCH_PATHS already points at
+      # $(PROJECT_DIR)/a, so no .pbxproj edit is needed.
+      #
+      # This step is unverified beyond compiling cleanly in isolation
+      # reasoning — it hasn't been confirmed against a real macOS/Xcode
+      # toolchain yet. Specific residual risks worth watching the next log
+      # for: whether icu.cpp (guarded by #ifdef BOOST_HAS_ICU, expected to
+      # compile to an empty translation unit without ICU headers, matching
+      # the original) actually does so cleanly here; whether the flags
+      # below produce object code the linker accepts as equivalent to
+      # what b2's own build system would have produced.
+      - name: build Boost.Regex from source (universal arm64+x86_64)
+        run: |
+          set -euo pipefail
+          cd /tmp/boost-1.72.0/libs/regex/src
+
+          SOURCES="c_regex_traits cpp_regex_traits cregex fileiter icu instances posix_api regex regex_debug regex_raw_buffer regex_traits_defaults static_mutex w32_regex_traits wc_regex_traits wide_posix_api winstances usinstances"
+
+          for ARCH in x86_64 arm64; do
+            mkdir -p "/tmp/boost-regex-build/$ARCH"
+            for SRC in $SOURCES; do
+              clang++ -arch "$ARCH" -mmacosx-version-min="${{ env.MACOS_DEPLOYMENT_TARGET }}" \
+                -stdlib=libc++ -std=c++11 -O2 -DNDEBUG \
+                -I/usr/local/Cellar/boost/1.72.0/include \
+                -c "$SRC.cpp" -o "/tmp/boost-regex-build/$ARCH/$SRC.o"
+            done
+            ar rcs "/tmp/boost-regex-build/libboost_regex_$ARCH.a" /tmp/boost-regex-build/$ARCH/*.o
+          done
+
+          lipo -create \
+            /tmp/boost-regex-build/libboost_regex_x86_64.a \
+            /tmp/boost-regex-build/libboost_regex_arm64.a \
+            -output /tmp/boost-regex-build/libboost_regex.a
+
+          lipo -info /tmp/boost-regex-build/libboost_regex.a
+
+          cp /tmp/boost-regex-build/libboost_regex.a "$GITHUB_WORKSPACE/a/libboost_regex.a"
+
       - name: build macOS plugin (universal)
         run: |
           xcodebuild -project "${{ env.XCODE_PROJECT }}" \
