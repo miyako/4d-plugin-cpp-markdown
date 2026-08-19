@@ -78,6 +78,21 @@ jobs:
       # doesn't produce a compiled library for this triplet. The matching
       # fix is on the .vcxproj side (see its own comment) — this step now
       # only installs headers.
+      #
+      # boost-regex/boost-optional alone got the build one step further, then
+      # failed on `boost/shared_ptr.hpp` — installing two of the ~8 Boost
+      # headers this project's source actually includes was itself a partial
+      # fix. Checked every compiled file's includes directly (markdown.h,
+      # markdown.cpp, markdown-tokens.cpp, markdown-tokens.h, plus the
+      # plugin's own .h) rather than adding packages one failing header at a
+      # time, to install the complete set in this one pass:
+      #   boost/noncopyable.hpp                -> boost-core
+      #   boost/shared_ptr.hpp                 -> boost-smart-ptr
+      #   boost/optional.hpp                   -> boost-optional (already had)
+      #   boost/unordered_map.hpp, unordered_set.hpp -> boost-unordered
+      #   boost/regex.hpp                      -> boost-regex (already had)
+      #   boost/lexical_cast.hpp               -> boost-lexical-cast
+      #   boost/algorithm/string/case_conv.hpp  -> boost-algorithm
       - name: install Boost (vcpkg)
         shell: pwsh
         run: |
@@ -85,7 +100,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path (Split-Path $vcpkgRoot) | Out-Null
           git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
           & "$vcpkgRoot\bootstrap-vcpkg.bat"
-          & "$vcpkgRoot\vcpkg.exe" install boost-regex:x64-windows-static boost-optional:x64-windows-static
+          & "$vcpkgRoot\vcpkg.exe" install `
+            boost-core:x64-windows-static `
+            boost-smart-ptr:x64-windows-static `
+            boost-optional:x64-windows-static `
+            boost-unordered:x64-windows-static `
+            boost-regex:x64-windows-static `
+            boost-lexical-cast:x64-windows-static `
+            boost-algorithm:x64-windows-static
 
       # GitHub-hosted windows-latest ships VS2022 (v143 toolset) but not the
       # legacy v140 toolset the project is pinned to, so we override it on
