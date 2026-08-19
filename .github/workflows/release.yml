@@ -69,17 +69,21 @@ jobs:
       # `#include <boost/noncopyable.hpp>` before ever reaching the link step.
       #
       # Fix: install vcpkg to that exact path (so the existing hardcoded
-      # include dir resolves with zero .vcxproj edits), then copy the
-      # resulting static lib into the exact name/location the linker expects.
+      # include dir resolves with zero .vcxproj edits), then locate and copy
+      # the resulting static lib into the exact name/location the linker
+      # expects.
       #
-      # The exact output filename vcpkg's boost-regex port produces for this
-      # triplet turned out NOT to be the plain `boost_regex.lib` originally
-      # guessed here (that guess was wrong and failed a real CI run with
-      # "Cannot find path ...boost_regex.lib because it does not exist").
-      # Rather than guess again, this now searches the actual install lib
-      # folder for whatever file matches and fails loudly with a directory
-      # listing if nothing does, so it's self-diagnosing instead of
-      # silently wrong a second time.
+      # Two guesses about vcpkg's output layout have already failed real CI
+      # runs here, in sequence: (1) assuming the exact filename
+      # (`boost_regex.lib`) — wrong, that file didn't exist; (2) assuming it
+      # would at least be directly under `installed\x64-windows-static\lib`
+      # — also wrong, that whole directory didn't exist on this vcpkg
+      # version/runner. Rather than guess a third specific location, this
+      # now searches the entire vcpkg root recursively for any matching
+      # `.lib` file and fails loudly with a full directory dump if none is
+      # found — this cannot be verified further without an actual Windows
+      # runner, so treat the next CI log as the real source of truth on
+      # where vcpkg actually put it, not this comment.
       - name: install Boost (vcpkg)
         shell: pwsh
         run: |
@@ -89,13 +93,13 @@ jobs:
           & "$vcpkgRoot\bootstrap-vcpkg.bat"
           & "$vcpkgRoot\vcpkg.exe" install boost-regex:x64-windows-static boost-optional:x64-windows-static
 
-          $libDir = Join-Path $vcpkgRoot "installed\x64-windows-static\lib"
-          $regexLib = Get-ChildItem -Path $libDir -Filter "*boost_regex*.lib" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $regexLib = Get-ChildItem -Path $vcpkgRoot -Recurse -Filter "*boost_regex*.lib" -ErrorAction SilentlyContinue | Select-Object -First 1
 
           if (-not $regexLib) {
-            Write-Host "Could not find a boost_regex library under $libDir. Contents:"
-            Get-ChildItem -Path $libDir | Format-Table Name
-            throw "boost_regex library not found after vcpkg install"
+            Write-Host "Could not find any boost_regex .lib anywhere under $vcpkgRoot. Full installed/packages tree:"
+            Get-ChildItem -Path (Join-Path $vcpkgRoot "installed") -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
+            Get-ChildItem -Path (Join-Path $vcpkgRoot "packages") -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
+            throw "boost_regex library not found anywhere under vcpkg root after install"
           }
 
           Write-Host "Using $($regexLib.FullName)"
