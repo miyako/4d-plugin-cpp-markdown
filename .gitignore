@@ -1,3 +1,8 @@
 build/*
 test/Project/DerivedData/*
 test/userPreferences.*
+.vs/*
+CPP Markdown.vcxproj.user
+Objs/*
+test/Plugins/CPP Markdown.bundle/Contents/Windows64/CPP Markdown.exp
+test/Plugins/CPP Markdown.bundle/Contents/Windows64/CPP Markdown.lib
