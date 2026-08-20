@@ -348,11 +348,7 @@
 				);
 				LIBRARY_STYLE = Bundle;
 				MACOSX_DEPLOYMENT_TARGET = 11.5;
-<<<<<<< HEAD
-				MARKETING_VERSION = 2.1.12;
-=======
-				MARKETING_VERSION = 2.1.16;
->>>>>>> 66f87abf4f3f7a6ffe9edcd637e35292795d51c7
+				MARKETING_VERSION = 2.2.0;
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
 				OTHER_REZFLAGS = "";
@@ -405,11 +401,7 @@
 				);
 				LIBRARY_STYLE = Bundle;
 				MACOSX_DEPLOYMENT_TARGET = 11.5;
-<<<<<<< HEAD
-				MARKETING_VERSION = 2.1.12;
-=======
-				MARKETING_VERSION = 2.1.16;
->>>>>>> 66f87abf4f3f7a6ffe9edcd637e35292795d51c7
+				MARKETING_VERSION = 2.2.0;
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
 				OTHER_REZFLAGS = "";
@@ -460,11 +452,7 @@
 				);
 				LIBRARY_STYLE = Bundle;
 				MACOSX_DEPLOYMENT_TARGET = 11.5;
-<<<<<<< HEAD
-				MARKETING_VERSION = 2.1.12;
-=======
-				MARKETING_VERSION = 2.1.16;
->>>>>>> 66f87abf4f3f7a6ffe9edcd637e35292795d51c7
+				MARKETING_VERSION = 2.2.0;
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
 				OTHER_REZFLAGS = "";
