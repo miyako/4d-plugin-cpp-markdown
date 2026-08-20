@@ -59,9 +59,25 @@ jobs:
       - name: setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      # GitHub-hosted windows-latest ships VS2022 (v143 toolset) but not the
-      # legacy v140 toolset the project is pinned to, so we override it on
-      # the command line rather than requiring an extra VS component install.
+      # GitHub-hosted windows-latest ships VS2022, which includes v143 as its
+      # native toolset, but also bundles the v142 (VS2019) toolset component
+      # for build compatibility. We override to v142 specifically here, not
+      # the newer v143 — this project vendors Boost 1.72.0 (released Nov
+      # 2019, before v143/VS2022 existed at all), and pairs that with a real
+      # prebuilt Boost.Regex binary built for the v142 toolset (see the
+      # AdditionalDependencies/AdditionalLibraryDirectories comments in the
+      # .vcxproj). MSVC's toolset ABI needs to match what that prebuilt
+      # binary was actually compiled with; v143 doesn't, v142 does. (This
+      # was discovered the hard way: v143 produced a working compile but a
+      # linker requesting a real, differently-toolset-tagged filename via
+      # Boost's own auto-link mechanism — see the .vcxproj's own note.)
+      #
+      # This assumes the v142 toolset component is present on the
+      # windows-latest image without any extra setup step — unverified
+      # until a real run confirms it; if MSBuild can't locate v142 at all
+      # (a distinct failure from anything seen so far), an explicit
+      # component-install step ahead of this one would be the next thing
+      # to add, not a reason to fall back to v143.
       #
       # The project also hardcodes WindowsTargetPlatformVersion=8.1 in
       # TZ.vcxproj (<PropertyGroup Label="Globals">), and the Windows 8.1 SDK
@@ -75,7 +91,7 @@ jobs:
       # build number that may not match the image.
       - name: build x64
         shell: cmd
-        run: msbuild "${{ env.VCX_SOLUTION }}" /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=10.0 /m
+        run: msbuild "${{ env.VCX_SOLUTION }}" /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v142 /p:WindowsTargetPlatformVersion=10.0 /m
 
       - name: upload windows binaries
         uses: actions/upload-artifact@v4
