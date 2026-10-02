@@ -27,6 +27,7 @@
 		D15EDDD623A340B200C1D564 /* markdown-tokens.h in Headers */ = {isa = PBXBuildFile; fileRef = D15EDDD423A340B200C1D564 /* markdown-tokens.h */; };
 		D15EDDD823A340D300C1D564 /* libcppmarkdown.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D15EDDD723A340D300C1D564 /* libcppmarkdown.a */; };
 		D15EDDDA23A3410500C1D564 /* libboost_regex.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D15EDDD923A3410500C1D564 /* libboost_regex.a */; };
+		E3EF28B25A51156CCD1CAAEB /* constants.xlf in CopyFiles */ = {isa = PBXBuildFile; fileRef = D14D10DD1A03A8A5008B3411 /* constants.xlf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -37,6 +38,7 @@
 			dstSubfolderSpec = 7;
 			files = (
 				D134D4AC1A030BA0008D14EF /* manifest.json in CopyFiles */,
+				E3EF28B25A51156CCD1CAAEB /* constants.xlf in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
