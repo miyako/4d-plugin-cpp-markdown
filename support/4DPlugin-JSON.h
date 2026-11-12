@@ -107,6 +107,8 @@ bool ob_get_a(PA_ObjectRef obj, const wchar_t *_key, CUTF8String *value);
 bool ob_get_b(PA_ObjectRef obj, const wchar_t *_key);
 double ob_get_n(PA_ObjectRef obj, const wchar_t *_key);
 PA_CollectionRef ob_get_c(PA_ObjectRef obj, const wchar_t *_key);
+// ob_get_c returns an owned reference; the caller must PA_DisposeCollection it.
+// Property getters and ob_stringify throw std::runtime_error on SDK failure.
 
 void ob_stringify(PA_ObjectRef obj, CUTF8String *value);
 

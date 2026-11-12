@@ -1,4 +1,41 @@
 #include "4DPlugin-JSON.h"
+#include <stdexcept>
+
+namespace {
+class StringOwner {
+public:
+    PA_Unistring value;
+    explicit StringOwner(PA_Unichar *text) : value(PA_CreateUnistring(text)) {}
+    ~StringOwner() { PA_DisposeUnistring(&value); }
+    StringOwner(const StringOwner&) = delete;
+    StringOwner& operator=(const StringOwner&) = delete;
+};
+
+class VariableOwner {
+public:
+    PA_Variable value;
+    explicit VariableOwner(PA_Variable variable) : value(variable) {}
+    ~VariableOwner() { PA_ClearVariable(&value); }
+    VariableOwner(const VariableOwner&) = delete;
+    VariableOwner& operator=(const VariableOwner&) = delete;
+};
+
+PA_Variable get_property(PA_ObjectRef obj, PA_Unistring *key) {
+    PA_Variable value = PA_GetObjectProperty(obj, key);
+    PA_ErrorCode error = PA_GetLastError();
+    if(error != eER_NoErr)
+        throw std::runtime_error("PA_GetObjectProperty failed: " + std::to_string(error));
+    return value;
+}
+
+bool has_property(PA_ObjectRef obj, PA_Unistring *key) {
+    bool defined = PA_HasObjectProperty(obj, key);
+    PA_ErrorCode error = PA_GetLastError();
+    if(error != eER_NoErr)
+        throw std::runtime_error("PA_HasObjectProperty failed: " + std::to_string(error));
+    return defined;
+}
+}
 
 void json_wconv(const wchar_t *value, CUTF16String *u16) {
     
@@ -25,7 +62,7 @@ void ob_set_p(PA_ObjectRef obj, const wchar_t *_key, PA_Picture value) {
     {
         if(value)
         {
-            PA_Variable v = PA_CreateVariable(eVK_Picture);
+            PA_Variable v = {};
             CUTF16String ukey;
             json_wconv(_key, &ukey);
             PA_Unistring key = PA_CreateUnistring((PA_Unichar *)ukey.c_str());
@@ -86,7 +123,7 @@ void ob_set_s(PA_ObjectRef obj, const char *_key, const char *_value) {
         PA_Unistring key = PA_CreateUnistring((PA_Unichar *)u16k.c_str());
         PA_Unistring value = PA_CreateUnistring((PA_Unichar *)u16v.c_str());
         
-        PA_Variable v = PA_CreateVariable(eVK_Unistring);
+        PA_Variable v = {};
         PA_SetStringVariable(&v, &value);
         PA_SetObjectProperty(obj, &key, v);
         
@@ -103,7 +140,7 @@ void ob_set_s(PA_ObjectRef obj, const wchar_t *_key, const char *_value) {
     {
         if(_value)
         {
-            PA_Variable v = PA_CreateVariable(eVK_Unistring);
+            PA_Variable v = {};
             CUTF16String ukey;
             
             json_wconv(_key, &ukey);
@@ -151,7 +188,7 @@ void ob_set_a(PA_ObjectRef obj, const wchar_t *_key, const wchar_t *_value) {
     {
         if(_value)
         {
-            PA_Variable v = PA_CreateVariable(eVK_Unistring);
+            PA_Variable v = {};
             CUTF16String ukey;
             CUTF16String uvalue;
             json_wconv(_key, &ukey);
@@ -180,7 +217,7 @@ void ob_set_a(PA_ObjectRef obj, const wchar_t *_key, const CUTF16String *_value)
         // UTF-16 data as wchar_t there would misread the buffer width and
         // corrupt or over-read it. Only _key -- a real wchar_t string
         // literal from the caller -- goes through the normal conversion.
-        PA_Variable v = PA_CreateVariable(eVK_Unistring);
+        PA_Variable v = {};
         CUTF16String ukey;
         json_wconv(_key, &ukey);
 
@@ -427,11 +464,9 @@ bool ob_is_defined(PA_ObjectRef obj, const wchar_t *_key) {
     {
         CUTF16String ukey;
         json_wconv(_key, &ukey);
-        PA_Unistring key = PA_CreateUnistring((PA_Unichar *)ukey.c_str());
+        StringOwner key((PA_Unichar *)ukey.c_str());
         
-        is_defined = PA_HasObjectProperty(obj, &key);
-        
-        PA_DisposeUnistring(&key);
+        is_defined = has_property(obj, &key.value);
     }
     return is_defined;
 }
@@ -444,12 +479,13 @@ bool ob_get_a(PA_ObjectRef obj, const wchar_t *_key, CUTF8String *value) {
     {
         CUTF16String ukey;
         json_wconv(_key, &ukey);
-        PA_Unistring key = PA_CreateUnistring((PA_Unichar *)ukey.c_str());
-        is_defined = PA_HasObjectProperty(obj, &key);
+        StringOwner key((PA_Unichar *)ukey.c_str());
+        is_defined = has_property(obj, &key.value);
         
         if(is_defined)
         {
-            PA_Variable v = PA_GetObjectProperty(obj, &key);
+            VariableOwner owner(get_property(obj, &key.value));
+            PA_Variable v = owner.value;
             if(PA_GetVariableKind(v) == eVK_Unistring)
             {
                 PA_Unistring uvalue = PA_GetStringVariable(v);
@@ -490,7 +526,6 @@ bool ob_get_a(PA_ObjectRef obj, const wchar_t *_key, CUTF8String *value) {
             }
         }
         
-        PA_DisposeUnistring(&key);
     }
     
     return is_defined;
@@ -504,18 +539,18 @@ bool ob_get_b(PA_ObjectRef obj, const wchar_t *_key) {
     {
         CUTF16String ukey;
         json_wconv(_key, &ukey);
-        PA_Unistring key = PA_CreateUnistring((PA_Unichar *)ukey.c_str());
+        StringOwner key((PA_Unichar *)ukey.c_str());
         
-        if(PA_HasObjectProperty(obj, &key))
+        if(has_property(obj, &key.value))
         {
-            PA_Variable v = PA_GetObjectProperty(obj, &key);
+            VariableOwner owner(get_property(obj, &key.value));
+            PA_Variable v = owner.value;
             if(PA_GetVariableKind(v) == eVK_Boolean)
             {
                 value = PA_GetBooleanVariable(v);
             }
         }
         
-        PA_DisposeUnistring(&key);
     }
     
     return value;
@@ -529,18 +564,18 @@ double ob_get_n(PA_ObjectRef obj, const wchar_t *_key) {
     {
         CUTF16String ukey;
         json_wconv(_key, &ukey);
-        PA_Unistring key = PA_CreateUnistring((PA_Unichar *)ukey.c_str());
+        StringOwner key((PA_Unichar *)ukey.c_str());
         
-        if(PA_HasObjectProperty(obj, &key))
+        if(has_property(obj, &key.value))
         {
-            PA_Variable v = PA_GetObjectProperty(obj, &key);
+            VariableOwner owner(get_property(obj, &key.value));
+            PA_Variable v = owner.value;
             if(PA_GetVariableKind(v) == eVK_Real)
             {
                 value = PA_GetRealVariable(v);
             }
         }
         
-        PA_DisposeUnistring(&key);
     }
     
     return value;
@@ -554,18 +589,20 @@ PA_CollectionRef ob_get_c(PA_ObjectRef obj, const wchar_t *_key) {
     {
         CUTF16String ukey;
         json_wconv(_key, &ukey);
-        PA_Unistring key = PA_CreateUnistring((PA_Unichar *)ukey.c_str());
+        StringOwner key((PA_Unichar *)ukey.c_str());
         
-        if(PA_HasObjectProperty(obj, &key))
+        if(has_property(obj, &key.value))
         {
-            PA_Variable v = PA_GetObjectProperty(obj, &key);
+            VariableOwner owner(get_property(obj, &key.value));
+            PA_Variable v = owner.value;
             if(PA_GetVariableKind(v) == eVK_Collection)
             {
                 value = PA_GetCollectionVariable(v);
+                // Hand the successful result's owner to the caller.
+                owner.value.fType = eVK_Undefined;
             }
         }
         
-        PA_DisposeUnistring(&key);
     }
     return value;
 }
@@ -574,18 +611,24 @@ void ob_stringify(PA_ObjectRef obj, CUTF8String *value) {
     
     if(!obj || !value) return;
     
-    PA_Variable    _params[1];
-    _params[0] = PA_CreateVariable(eVK_Object);
-    PA_SetObjectVariable(&_params[0], PA_DuplicateObject(obj));
+    PA_ObjectRef duplicate = PA_DuplicateObject(obj);
+    PA_ErrorCode error = PA_GetLastError();
+    if(error != eER_NoErr)
+        throw std::runtime_error("PA_DuplicateObject failed: " + std::to_string(error));
+    PA_Variable _params[1] = {};
+    PA_SetObjectVariable(&_params[0], duplicate);
+    VariableOwner argument(_params[0]);
     PA_Variable vjson = PA_ExecuteCommandByID( /*JSON Stringify */1217, _params, 1);
-    PA_ClearVariable(&_params[0]);
+    error = PA_GetLastError();
+    if(error != eER_NoErr)
+        throw std::runtime_error("JSON Stringify failed: " + std::to_string(error));
+    VariableOwner result(vjson);
     
     if(PA_GetVariableKind(vjson) != eVK_Unistring)
     {
         // "JSON Stringify" didn't return a string (unexpected failure) --
         // bail out instead of reading a Unistring out of a variable that
         // may not hold one.
-        PA_ClearVariable(&vjson);
         return;
     }
     
@@ -618,5 +661,4 @@ void ob_stringify(PA_ObjectRef obj, CUTF8String *value) {
     
 #endif
     
-    PA_ClearVariable(&vjson);
 }

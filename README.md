@@ -142,3 +142,87 @@ For the full syntax reference and examples, see: [miyako.github.io/2019/12/13/4d
 | Result is an empty string | Input exceeded 1 MB, or the Markdown could not be parsed | Check input size; simplify or validate the Markdown |
 | Unexpected HTML formatting | Markdown source has ambiguous or non-standard syntax | Test the same input against a standard Markdown reference to confirm expected output |
 | No response / delay on very large input | Extremely large or deeply nested input can take longer to process even under the 1 MB cap | Break large documents into smaller sections and convert each separately |
+
+## Maintainer ownership regression
+
+On macOS, run `python3 tests/ownership/run.py`. This unsigned synthetic test
+compiles the complete bundled SDK, all wrapper implementations, the JSON
+helpers, and the real exported dispatcher and Markdown parser. It does not
+invoke Xcode/MSBuild, the release workflows, or a 4D installation. Engine
+selectors and command IDs are allowlisted; path and drawing boundaries throw,
+and executable imports are checked before execution. Fixtures are in memory.
+The only non-system library is the bundled universal Boost.Regex archive
+(SHA-256 `5a7f1035febc9361af788834d081e749b0eadd86edc36d7b00f61dea5cc2ad5c`);
+no dependency installation or network operation is part of the test.
+
+The ownership audit baseline is
+`f57992aec7f65f7f9c1b96aa460c2e26abcf6606`. Both native projects compile only
+the SDK, `C_TEXT`, dispatcher, and parser. The manifest has one scalar text
+command and **no array signatures**. `ARRAY_TEXT`, `C_BLOB`, `C_LONGINT`, and
+`support/4DPlugin-JSON.cpp` are dormant support code, with no dispatcher,
+parser, callback, or internal command consumers. The exported command has
+no reachable array-transfer defect. Its source and `C_TEXT` implementation
+are unchanged.
+
+The dormant JSON fixes avoid overwriting initialized empty string/picture
+owners, clear successful property results (including type mismatches), and
+capture SDK errors before adopting or inspecting property/command outputs.
+Property helpers and `ob_stringify` now throw `std::runtime_error` on SDK
+failure instead of silently consuming an unspecified result. Existing
+successful type-mismatch defaults remain unchanged. `ob_get_c` transfers
+its successful collection result owner to the caller, which must call
+`PA_DisposeCollection`. Picture/object/collection setters retain their
+existing consume-the-supplied-owner semantics; do not pass borrowed values.
+`ARRAY_TEXT` and `C_BLOB` reject raw-pointer shallow copies, matching the
+existing `C_TEXT` restriction. No production copy-related crash is claimed.
+
+The same harness against a `git archive` of the immutable baseline reports
+**169 checks, 31 failures, 138 passing controls**; fixed sources report
+**169 checks, zero failures**. Baseline failures are:
+
+| Named failure | Count |
+|---|---:|
+| ARRAY_TEXT / C_BLOB shallow owner copy traits | 2 |
+| Narrow setter isolated owner balance | 4 |
+| Narrow setter/getter owner balance | 4 |
+| Wide-key string setter owner balance | 4 |
+| Wide-value / native UTF-16 / picture setter owner balance | 3 |
+| All getter success/type-mismatch owner balance | 3 |
+| Failed duplicate/stringify command adoption | 2 |
+| Failed property-existence command reporting | 5 |
+| Failed property result adoption | 4 |
+
+Controls include ASCII, BMP and supplementary characters, empty strings,
+UTF-16 lengths and termination, capacity/reuse boundaries, explicit string,
+handle, picture and reference-owner balances, collection handoff, array
+index zero, accepted independent transfers, allocator churn, rejected
+kind/index/null-data/null-input assignments, resize/clear, actual dispatcher
+HTML, and the oversized-input guard. The array setter is tested unchanged:
+accepted descriptors transfer ownership and rejected descriptors remain
+caller-owned; getter descriptors are borrowed and snapshots copy content.
+No cleanup is removed from synchronous SDK callbacks.
+
+SDK implementation/ABI files remain unchanged. Baseline Git blob identities:
+
+| File in `4D Plugin API/` | Git blob |
+|---|---|
+| `4DPluginAPI.c` | `62f745e91d81ef2c3c901c656ea8e175d3b173e8` |
+| `4DPluginAPI.h` | `528bf1d2552df08d6a8b1bc95011a9b72934ad5c` |
+| `PrivateTypes.h` | `a3098cb662cdbc43ba574fdef72a059c4c6d1cd4` |
+| `PublicTypes.h` | `9ae20b001bff9128f690fff3e6c3f873b6238333` |
+| `EntryPoints.h` | `da428d5f6ca23b0a30371c7288a01d29aa3c466a` |
+| `Flags.h` | `7a5a35539f27430a3fd9cb711d6b789051316471` |
+
+Canonical guidance was read at immutable and current revision
+`e6b492fcb81e5e1a7f7db723594b420e63bf6eb9` of
+`miyako/skills/4d-skills/skills/4dplugin/SKILL.md`.
+ASan and UBSan run with packed SDK alignment excluded; macOS LSan is
+disabled and explicit owner accounting is used instead. The synthetic host
+uses allocated empty strings/pictures and independently owned successful
+property results. Failed outputs use a permissible raw-type-zero poison,
+not an assumed failure-output contract. Actual macOS/Windows 4D execution,
+native Windows compilation, other unspecified failure-output shapes,
+OOM/resize failure and malformed metadata contracts remain unverified.
+The prebuilt Boost.Regex dependency is not sanitizer-instrumented.
+Deployment builds, signing, notarization, binary packaging and release
+publication are not part of this regression workflow.
