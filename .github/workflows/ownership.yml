@@ -1,0 +1,37 @@
+name: Ownership regression
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify unchanged SDK and fixed actual sources
+        run: |
+          git diff --exit-code f57992aec7f65f7f9c1b96aa460c2e26abcf6606 -- \
+            "4D Plugin API/4DPluginAPI.c" "4D Plugin API/4DPluginAPI.h" \
+            "4D Plugin API/PrivateTypes.h" "4D Plugin API/PublicTypes.h" \
+            "4D Plugin API/EntryPoints.h" "4D Plugin API/Flags.h"
+          python3 tests/ownership/run.py
+      - name: Verify same harness detects immutable baseline defects
+        run: |
+          mkdir "$RUNNER_TEMP/ownership-baseline"
+          git archive f57992aec7f65f7f9c1b96aa460c2e26abcf6606 | tar -x -C "$RUNNER_TEMP/ownership-baseline"
+          set +e
+          python3 tests/ownership/run.py "$RUNNER_TEMP/ownership-baseline" > "$RUNNER_TEMP/ownership-baseline.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/ownership-baseline.log"
+          test "$status" -eq 1
+          grep -Fx 'checks=169 failures=31' "$RUNNER_TEMP/ownership-baseline.log"
